@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Serverless Anomaly Detection Pipeline on AWS
+  Real-time serverless ML pipeline using S3, Lambda, Scikit-learn Isolation Forest,
+  DynamoDB, SNS, API Gateway, and CloudWatch.
+
+Globals:
+  Function:
+    Runtime: python3.10
+    Architectures:
+      - x86_64
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: serverless-anomaly-detection
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment stage.
+  AlertThreshold:
+    Type: Number
+    Default: 1
+    Description: Minimum anomalies in a single batch to trigger an SNS alert notification.
+  ModelContamination:
+    Type: String
+    Default: "0.05"
+    Description: Expected anomaly contamination rate for Isolation Forest.
+
+Resources:
+  # ----------------------------------------------------------------------
+  # S3 Ingestion Bucket
+  # ----------------------------------------------------------------------
+  InputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireTemporaryUploads
+            Status: Enabled
+            ExpirationInDays: 90
+
+  # ----------------------------------------------------------------------
+  # DynamoDB Storage Table
+  # ----------------------------------------------------------------------
+  AnomalyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: record_type
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TypeCreatedAtIndex
+          KeySchema:
+            - AttributeName: record_type
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # ----------------------------------------------------------------------
+  # SNS Alerting Topic
+  # ----------------------------------------------------------------------
+  AnomalyAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Serverless Anomaly Detection Alerts
+      KmsMasterKeyId: alias/aws/sns
+
+  # ----------------------------------------------------------------------
+  # SQS Dead Letter Queue (DLQ) for Processing Failures
+  # ----------------------------------------------------------------------
+  ProcessorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600 # 14 days
+      KmsMasterKeyId: alias/aws/sqs
+
+  # ----------------------------------------------------------------------
+  # API Gateway REST API
+  # ----------------------------------------------------------------------
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        AllowOrigin: "'*'"
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          MetricsEnabled: true
+          LoggingLevel: INFO
+          DataTraceEnabled: false
+
+  # ----------------------------------------------------------------------
+  # Lambda Processing Function (S3 Triggered)
+  # ----------------------------------------------------------------------
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/processor/
+      Handler: handler.lambda_handler
+      Timeout: 60
+      MemorySize: 512
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ProcessorDLQ.Arn
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref AnomalyTable
+          SNS_TOPIC_ARN: !Ref AnomalyAlertsTopic
+          ALERT_THRESHOLD: !Ref AlertThreshold
+          ALLOWED_PREFIX: "incoming/"
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Sid: S3ReadInputAccess
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: !Sub "${InputBucket.Arn}/*"
+            - Sid: DynamoDBWriteAccess
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:BatchWriteItem
+              Resource:
+                - !GetAtt AnomalyTable.Arn
+                - !Sub "${AnomalyTable.Arn}/index/*"
+            - Sid: SNSPublishAccess
+              Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref AnomalyAlertsTopic
+            - Sid: CloudWatchMetricsAccess
+              Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: "ServerlessAnomalyDetection"
+            - Sid: SQSDeadLetterAccess
+              Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ProcessorDLQ.Arn
+      Events:
+        S3CsvUpload:
+          Type: S3
+          Properties:
+            Bucket: !Ref InputBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: incoming/
+                  - Name: suffix
+                    Value: .csv
+
+  # ----------------------------------------------------------------------
+  # Lambda API Function (API Gateway Proxy)
+  # ----------------------------------------------------------------------
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/api/
+      Handler: handler.lambda_handler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref AnomalyTable
+          INDEX_NAME: "TypeCreatedAtIndex"
+          LOG_LEVEL: INFO
+      Policies:
+        - Statement:
+            - Sid: DynamoDBReadOnlyAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                - !GetAtt AnomalyTable.Arn
+                - !Sub "${AnomalyTable.Arn}/index/*"
+      Events:
+        HealthEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /health
+            Method: GET
+        GetAnomaliesEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /anomalies
+            Method: GET
+        GetAnomalyByIdEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /anomalies/{id}
+            Method: GET
+        GetSummaryEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /summary
+            Method: GET
+
+  # ----------------------------------------------------------------------
+  # CloudWatch Log Groups with Retention
+  # ----------------------------------------------------------------------
+  ProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProcessorFunction}"
+      RetentionInDays: 14
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ApiFunction}"
+      RetentionInDays: 14
+
+  # ----------------------------------------------------------------------
+  # CloudWatch Alarms
+  # ----------------------------------------------------------------------
+  ProcessorErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Triggered when the Processor Lambda encounters unhandled errors.
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AnomalyAlertsTopic
+
+  ApiErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Triggered when the API Lambda encounters server errors.
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AnomalyAlertsTopic
+
+  HighAnomalySpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Triggered when a batch exhibits an alarming anomaly spike.
+      MetricName: AnomaliesDetected
+      Namespace: ServerlessAnomalyDetection
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 25
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AnomalyAlertsTopic
+
+# ----------------------------------------------------------------------
+# Stack Outputs
+# ----------------------------------------------------------------------
+Outputs:
+  ApiEndpoint:
+    Description: Production API Gateway base URL
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+
+  InputBucketName:
+    Description: S3 Ingestion Bucket Name (Upload CSV files to incoming/ prefix)
+    Value: !Ref InputBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-InputBucket"
+
+  DynamoDBTableName:
+    Description: DynamoDB Table for Anomaly Records & Metadata
+    Value: !Ref AnomalyTable
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTable"
+
+  SnsTopicArn:
+    Description: SNS Topic ARN for Anomaly and Failure Alerts
+    Value: !Ref AnomalyAlertsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-SnsTopicArn"
+
+  DeadLetterQueueUrl:
+    Description: Dead Letter Queue URL for failed processor executions
+    Value: !Ref ProcessorDLQ

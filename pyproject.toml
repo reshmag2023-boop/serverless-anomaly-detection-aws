@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serverless-anomaly-detection-aws"
+version = "1.0.0"
+description = "Serverless Anomaly Detection Pipeline on AWS using Lambda, S3, DynamoDB, SNS, API Gateway, and Scikit-Learn Isolation Forest."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Reshma G" }]
+dependencies = [
+    "scikit-learn>=1.2.0,<1.6.0",
+    "pandas>=2.0.0,<2.3.0",
+    "numpy>=1.24.0,<2.1.0",
+    "joblib>=1.2.0,<1.5.0",
+    "boto3>=1.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "moto[s3,dynamodb,sns,cloudwatch]>=4.2.0",
+    "cfn-lint>=0.83.0",
+    "black>=23.7.0",
+    "flake8>=6.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+include = '\.pyi?$'
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*"]

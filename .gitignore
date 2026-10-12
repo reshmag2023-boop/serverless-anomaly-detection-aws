@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env.local
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+nosetests.xml
+coverage.xml
+
+# AWS SAM build outputs
+.aws-sam/
+samconfig.toml
+!samconfig.toml.example
+
+# Environment & Credentials (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+credentials
+credentials.csv
+
+# Logs & Databases
+*.log
+*.sqlite3
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Preserved versioned model artifacts
+!src/processor/models/isolation_forest_model.joblib

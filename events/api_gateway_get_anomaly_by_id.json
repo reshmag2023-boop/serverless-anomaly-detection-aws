@@ -1,0 +1,22 @@
+{
+  "resource": "/anomalies/{id}",
+  "path": "/anomalies/anom_sample_TXN_000005",
+  "httpMethod": "GET",
+  "headers": {
+    "Accept": "application/json"
+  },
+  "queryStringParameters": null,
+  "pathParameters": {
+    "id": "anom_sample_TXN_000005"
+  },
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "123456",
+    "resourcePath": "/anomalies/{id}",
+    "httpMethod": "GET",
+    "stage": "Prod",
+    "requestId": "test-req-id"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

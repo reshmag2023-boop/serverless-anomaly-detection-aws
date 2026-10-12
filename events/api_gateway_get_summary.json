@@ -1,0 +1,20 @@
+{
+  "resource": "/summary",
+  "path": "/summary",
+  "httpMethod": "GET",
+  "headers": {
+    "Accept": "application/json"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "123456",
+    "resourcePath": "/summary",
+    "httpMethod": "GET",
+    "stage": "Prod",
+    "requestId": "test-req-summary"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

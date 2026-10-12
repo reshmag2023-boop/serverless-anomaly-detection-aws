@@ -1,0 +1,3 @@
+# Lambda API Runtime Dependencies
+# Keep API Lambda lightweight for fast cold starts
+boto3>=1.28.0

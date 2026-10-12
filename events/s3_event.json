@@ -1,0 +1,38 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "us-east-1",
+      "eventTime": "2026-10-12T12:00:00.000Z",
+      "eventName": "ObjectCreated:Put",
+      "userIdentity": {
+        "principalId": "AWS:EXAMPLE_PRINCIPAL"
+      },
+      "requestParameters": {
+        "sourceIPAddress": "127.0.0.1"
+      },
+      "responseElements": {
+        "x-amz-request-id": "C3D13FE58DE4C810",
+        "x-amz-id-2": "FMyUVURIY8/IgAtTv8xRjskZQpcIZ9KG4V5Wp6S7FiQMU=EXAMPLE"
+      },
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "S3CsvUploadTrigger",
+        "bucket": {
+          "name": "serverless-anomaly-detection-bucket",
+          "ownerIdentity": {
+            "principalId": "EXAMPLE_OWNER"
+          },
+          "arn": "arn:aws:s3:::serverless-anomaly-detection-bucket"
+        },
+        "object": {
+          "key": "incoming/sample_transactions.csv",
+          "size": 4096,
+          "eTag": "0123456789abcdef0123456789abcdef",
+          "sequencer": "0A1B2C3D4E5F678901"
+        }
+      }
+    }
+  ]
+}

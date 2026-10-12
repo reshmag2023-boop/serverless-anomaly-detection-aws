@@ -1,0 +1,20 @@
+{
+  "resource": "/health",
+  "path": "/health",
+  "httpMethod": "GET",
+  "headers": {
+    "Accept": "application/json"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "123456",
+    "resourcePath": "/health",
+    "httpMethod": "GET",
+    "stage": "Prod",
+    "requestId": "test-req-health"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

@@ -1,0 +1,27 @@
+{
+  "model_version": "1.0.0",
+  "sample_count": 2000,
+  "ground_truth_anomalies": 100,
+  "detected_anomalies": 100,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1_score": 1.0,
+  "roc_auc": 1.0,
+  "confusion_matrix": {
+    "true_negative": 1900,
+    "false_positive": 0,
+    "false_negative": 0,
+    "true_positive": 100
+  },
+  "parameters": {
+    "contamination": 0.05,
+    "n_estimators": 100,
+    "random_state": 42,
+    "feature_columns": [
+      "amount",
+      "transaction_velocity",
+      "distance_from_home",
+      "device_risk_score"
+    ]
+  }
+}

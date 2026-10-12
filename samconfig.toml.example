@@ -1,0 +1,38 @@
+# AWS SAM CLI Configuration Example
+# Copy this file to samconfig.toml to customize your local and CI/CD deployment settings.
+
+version = 0.1
+
+[default]
+[default.build]
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate]
+[default.validate.parameters]
+lint = true
+
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "serverless-anomaly-detection"
+s3_prefix = "serverless-anomaly-detection"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Environment=\"dev\"",
+    "AlertThreshold=\"1\"",
+    "ModelContamination=\"0.05\""
+]
+image_repositories = []
+
+[default.local_start_api]
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+port = 3000
+
+[default.local_start_lambda]
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+port = 3001
