@@ -43,6 +43,7 @@ Resources:
   InputBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: !Sub "${AWS::StackName}-incoming-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -154,7 +155,7 @@ Resources:
               Action:
                 - s3:GetObject
                 - s3:GetObjectVersion
-              Resource: !Sub "${InputBucket.Arn}/*"
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-incoming-${AWS::AccountId}/*"
             - Sid: DynamoDBWriteAccess
               Effect: Allow
               Action:
